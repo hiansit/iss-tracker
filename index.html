@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>ISS Tracker 3D/2D - 国際宇宙ステーション リアルタイム追跡</title>
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛰️</text></svg>">
+    
+    <!-- CSS (キャッシュバスター付与) -->
+    <link rel="stylesheet" href="css/style.css?v=20260927_02">
+
+    <!-- CDN Libraries: Three.js, Globe.gl, D3.js, D3-Geo-Projection, TopoJSON -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-geo-projection@4/dist/d3-geo-projection.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+</head>
+<body>
+    <!-- 3D地球儀レンダリング用コンテナ -->
+    <div id="globe-container" class="view-layer active"></div>
+
+    <!-- 2D世界地図レンダリング用コンテナ -->
+    <div id="map-container" class="view-layer">
+        <canvas id="world-map-canvas"></canvas>
+    </div>
+
+    <!-- HUD (Head-Up Display) インターフェース -->
+    <div class="hud-overlay">
+        <!-- 上部ヘッダー -->
+        <header class="hud-header">
+            <div class="hud-panel header-left">
+                <div class="app-title">
+                    <span class="satellite-icon">🛰️</span>
+                    <span>ISS ORBIT TRACKER</span>
+                    <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+                </div>
+                <div class="current-region-bar" id="telemetry-region">
+                    位置情報を受信中...
+                </div>
+            </div>
+
+            <!-- 右上コントロールバー -->
+            <div class="hud-panel controls-bar">
+                <!-- ビュー切り替え (3D地球儀 / 2D世界地図) -->
+                <div class="btn-group view-toggle-group">
+                    <button id="btn-view-globe" class="hud-btn active" title="3D地球儀表示">
+                        <span>🌍</span><span class="btn-text">地球儀</span>
+                    </button>
+                    <button id="btn-view-map" class="hud-btn" title="2D世界地図表示">
+                        <span>🗺️</span><span class="btn-text">世界地図</span>
+                    </button>
+                </div>
+
+                <!-- 2D世界地図時の図法セレクター -->
+                <div id="projection-selector-wrapper" class="projection-wrapper" style="display: none;">
+                    <select id="select-projection" class="hud-select" title="地図投影法の切り替え">
+                        <option value="equalEarth" selected>イコールアース図法 (Equal Earth)</option>
+                        <option value="mercator">メルカトル図法 (Mercator)</option>
+                        <option value="equirectangular">正距円筒図法 (Equirectangular)</option>
+                    </select>
+                </div>
+
+                <!-- 軌道履歴・タイムトラベル開閉ボタン -->
+                <button id="btn-toggle-timetravel" class="hud-btn" title="過去周回の航跡・タイムトラベル操作パネルを開閉">
+                    <span>⏱️</span><span class="btn-text">軌道履歴</span>
+                </button>
+
+                <button id="btn-track" class="hud-btn active" title="ISSカメラ自動追従のON/OFF">
+                    <span>🎯</span><span class="btn-text">追従: ON</span>
+                </button>
+                <button id="btn-japan" class="hud-btn" title="日本上空へカメラを移動">
+                    <span>🇯🇵</span><span class="btn-text">日本</span>
+                </button>
+                <button id="btn-daynight" class="hud-btn" title="地球テクスチャを昼景/夜景で切り替え">
+                    <span>🌓</span><span class="btn-text">夜景切替</span>
+                </button>
+                <button id="btn-widget-toggle" class="hud-btn" title="デスクトップ常駐用コンパクトウィジェット表示">
+                    <span>🪟</span><span class="btn-text">Widget</span>
+                </button>
+                <button id="btn-pip" class="hud-btn" title="ブラウザ外の独立最前面ウィンドウで表示 (Picture-in-Picture)">
+                    <span>📌</span><span class="btn-text">PiP小窓</span>
+                </button>
+                <button id="btn-settings" class="hud-btn" title="設定">
+                    <span>⚙️</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ミニウィジェットバー (Widgetモード時に表示) -->
+        <div class="mini-widget-bar" id="mini-widget-bar">
+            <span>🛰️ ISS</span>
+            <span>LAT: <strong id="mini-lat">--</strong></span>
+            <span>LON: <strong id="mini-lon">--</strong></span>
+            <span>ALT: <strong id="mini-alt">--</strong></span>
+            <span>SPD: <strong id="mini-spd">--</strong></span>
+        </div>
+
+        <!-- 下部エリア（タイムトラベルドック ＋ テレメトリフッター） -->
+        <div class="hud-bottom-dock">
+            <!-- タイムトラベル・スリムパネル（折りたたみ可能） -->
+            <div class="hud-panel time-travel-panel collapsed" id="time-travel-panel">
+                <div class="time-travel-left">
+                    <span class="time-travel-badge">⏱️ 軌道履歴</span>
+                    <button id="btn-replay" class="hud-btn btn-replay" title="指定した過去時間から現在までの飛行アニメーションを再生">
+                        <span id="replay-icon">▶</span><span id="replay-text">飛行再生</span>
+                    </button>
+                    <!-- 過去周回数プリセット -->
+                    <div class="preset-buttons">
+                        <button class="preset-btn" data-minutes="0">現在</button>
+                        <button class="preset-btn active" data-minutes="93">1周 (1.5h)</button>
+                        <button class="preset-btn" data-minutes="186">2周 (3.1h)</button>
+                        <button class="preset-btn" data-minutes="372">4周 (6.2h)</button>
+                        <button class="preset-btn" data-minutes="1440">24h (16周)</button>
+                    </div>
+                </div>
+
+                <div class="time-travel-right">
+                    <div class="slider-wrapper">
+                        <input type="range" id="slider-past-time" min="0" max="1440" step="5" value="93" class="custom-range time-slider">
+                        <span id="label-past-time" class="time-display">93 分前</span>
+                    </div>
+                    <span class="time-travel-status" id="time-travel-status">リアルタイム</span>
+                    <button class="btn-close-sub" id="btn-close-timetravel" title="閉じる">&times;</button>
+                </div>
+            </div>
+
+            <!-- 下部フッター (リアルタイムテレメトリ表示) -->
+            <footer class="hud-footer">
+                <div class="hud-panel telemetry-grid">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">緯度 (Latitude)</span>
+                        <span class="telemetry-value highlight" id="telemetry-lat">--°</span>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">経度 (Longitude)</span>
+                        <span class="telemetry-value highlight" id="telemetry-lon">--°</span>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">高度 (Altitude)</span>
+                        <span class="telemetry-value" id="telemetry-alt">-- km</span>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">対地速度 (Velocity)</span>
+                        <span class="telemetry-value" id="telemetry-spd">-- km/h</span>
+                    </div>
+                </div>
+
+                <div class="hud-panel meta-panel">
+                    <div class="meta-row">
+                        <span>取得時刻:</span>
+                        <span id="telemetry-time">--:--:--</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>データ元:</span>
+                        <span id="source-name">接続中...</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>軌道傾斜角:</span>
+                        <span>51.64°</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>周回周期:</span>
+                        <span>約92.9分 (1日15.5周)</span>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- 設定モーダル -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">⚙️ トラッカー設定</h3>
+                <button class="btn-close" id="btn-close-settings">&times;</button>
+            </div>
+
+            <div class="setting-item">
+                <label class="setting-label">APIデータソース</label>
+                <select id="select-api-source" class="custom-select">
+                    <option value="wheretheiss">Where The ISS at? (HTTPS対応・速度/高度標準) [推奨]</option>
+                    <option value="open_notify">Open Notify API (http://api.open-notify.org/iss-now.json)</option>
+                </select>
+                <p class="setting-desc">
+                    ※ GitHub PagesなどのHTTPS環境では、Open Notify直接呼び出し時にMixed Content制約があるためプロキシ経由で中継されます。
+                </p>
+            </div>
+
+            <div class="setting-item">
+                <label class="setting-label">
+                    データ更新間隔: <span id="label-interval" style="color: var(--cyan);">3 秒</span>
+                </label>
+                <input type="range" id="range-interval" class="custom-range" min="1" max="10" step="1" value="3">
+                <p class="setting-desc">ISSの軌道位置を取得するインターバル（秒）を指定します。</p>
+            </div>
+
+            <div class="setting-item" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; margin-top: 12px;">
+                <label class="setting-label">📚 クレジット・謝辞 (Credits)</label>
+                <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.6;">
+                    <div>・<strong>3D地球儀:</strong> Three.js / Globe.gl (MIT License)</div>
+                    <div>・<strong>2D世界地図:</strong> D3.js / d3-geo-projection (ISC License)</div>
+                    <div>・<strong>地図データ:</strong> World Atlas / Natural Earth (Public Domain)</div>
+                    <div>・<strong>地球テクスチャ:</strong> NASA Earth Observatory (Public Domain)</div>
+                    <div>・<strong>ISSデータ:</strong> WhereTheISS.at / Open Notify</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- アプリケーションスクリプト (キャッシュバスター付与) -->
+    <script src="js/iss-service.js?v=20260927_02"></script>
+    <script src="js/orbit-calculator.js?v=20260927_02"></script>
+    <script src="js/globe-controller.js?v=20260927_02"></script>
+    <script src="js/map-controller.js?v=20260927_02"></script>
+    <script src="js/app.js?v=20260927_02"></script>
+</body>
+</html>

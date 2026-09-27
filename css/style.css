@@ -1,0 +1,656 @@
+/* ==========================================================================
+   ISS リアルタイム3D地球儀＆2D世界地図追跡 - スタイルシート
+   ========================================================================== */
+
+:root {
+    --bg-dark: #070a12;
+    --panel-bg: rgba(10, 16, 30, 0.85);
+    --panel-border: rgba(0, 240, 255, 0.28);
+    --panel-hover: rgba(0, 240, 255, 0.18);
+    --cyan: #00f0ff;
+    --cyan-glow: rgba(0, 240, 255, 0.4);
+    --blue: #1e88e5;
+    --orange: #ffaa00;
+    --text-primary: #e6f1ff;
+    --text-muted: #8aa0bf;
+    --status-live: #00ff66;
+    --font-mono: 'Consolas', 'Menlo', 'Courier New', monospace;
+    --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-dark);
+    font-family: var(--font-main);
+    color: var(--text-primary);
+}
+
+/* 表示レイヤー (3D地球儀 & 2D世界地図) */
+.view-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+    z-index: 1;
+}
+
+.view-layer.active {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 2;
+}
+
+#map-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #060a14;
+}
+
+#world-map-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* HUD オーバーレイレイヤー */
+.hud-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 14px 18px;
+    transition: all 0.3s ease;
+}
+
+.hud-panel {
+    pointer-events: auto;
+    background: var(--panel-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 240, 255, 0.08);
+}
+
+/* ヘッダーエリア */
+.hud-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.header-left {
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.app-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: #fff;
+    text-shadow: 0 0 10px var(--cyan-glow);
+}
+
+.app-title .satellite-icon {
+    font-size: 1.2rem;
+}
+
+.live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0, 255, 102, 0.15);
+    border: 1px solid var(--status-live);
+    color: var(--status-live);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+.live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--status-live);
+    box-shadow: 0 0 8px var(--status-live);
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.8); }
+}
+
+.current-region-bar {
+    font-size: 0.82rem;
+    color: var(--cyan);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.current-region-bar::before {
+    content: "📍";
+    font-size: 0.82rem;
+}
+
+/* コントロールバー */
+.controls-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+}
+
+.btn-group {
+    display: flex;
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.btn-group .hud-btn {
+    border: none;
+    border-radius: 0;
+    border-right: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.btn-group .hud-btn:last-child {
+    border-right: none;
+}
+
+.hud-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    padding: 6px 11px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+}
+
+.hud-btn:hover {
+    background: var(--panel-hover);
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+}
+
+.hud-btn.active {
+    background: rgba(0, 240, 255, 0.22);
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+/* 図法セレクター */
+.projection-wrapper {
+    display: flex;
+    align-items: center;
+}
+
+.hud-select {
+    background: rgba(10, 20, 40, 0.95);
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
+}
+
+.hud-select option {
+    background: #0f172a;
+    color: #fff;
+}
+
+/* ==========================================================================
+   下部ボトムドック (タイムトラベルパネル + フッター)
+   ========================================================================== */
+.hud-bottom-dock {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+/* タイムトラベル・スリムパネル (開閉ドロワー型) */
+.time-travel-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 14px;
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    border-color: rgba(255, 170, 0, 0.35);
+    background: rgba(12, 18, 32, 0.92);
+}
+
+.time-travel-panel.collapsed {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    opacity: 0;
+    transform: translateY(12px);
+    pointer-events: none;
+    border-color: transparent;
+    overflow: hidden;
+}
+
+.time-travel-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.time-travel-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--orange);
+    white-space: nowrap;
+}
+
+.time-travel-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.btn-replay {
+    background: rgba(255, 170, 0, 0.15);
+    border-color: var(--orange);
+    color: var(--orange);
+    padding: 4px 10px;
+    font-size: 0.74rem;
+}
+
+.btn-replay:hover, .btn-replay.active {
+    background: rgba(255, 170, 0, 0.3);
+    box-shadow: 0 0 10px rgba(255, 170, 0, 0.4);
+    color: #fff;
+}
+
+.preset-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.preset-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-muted);
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.preset-btn:hover {
+    border-color: var(--cyan);
+    color: var(--text-primary);
+}
+
+.preset-btn.active {
+    background: rgba(0, 240, 255, 0.2);
+    border-color: var(--cyan);
+    color: var(--cyan);
+    font-weight: bold;
+}
+
+.slider-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 220px;
+    width: 100%;
+}
+
+.time-slider {
+    flex: 1;
+    cursor: pointer;
+    accent-color: var(--cyan);
+}
+
+.time-display {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--cyan);
+    white-space: nowrap;
+    min-width: 60px;
+    text-align: right;
+}
+
+.time-travel-status {
+    font-size: 0.72rem;
+    color: var(--orange);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+}
+
+.btn-close-sub {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.btn-close-sub:hover {
+    color: #fff;
+}
+
+/* フッターエリア (テレメトリ数値情報) */
+.hud-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.telemetry-grid {
+    padding: 10px 18px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.telemetry-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.telemetry-label {
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.telemetry-value {
+    font-family: var(--font-mono);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+.telemetry-value.highlight {
+    color: var(--cyan);
+    text-shadow: 0 0 10px var(--cyan-glow);
+}
+
+.meta-panel {
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.meta-row span:last-child {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* ISS 3D HTML マーカー */
+.iss-3d-marker {
+    position: relative;
+    width: 50px;
+    height: 50px;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+}
+
+.iss-marker-pulse {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    border: 1.5px solid var(--cyan);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    animation: radar-pulse 2s infinite ease-out;
+}
+
+@keyframes radar-pulse {
+    0% { width: 8px; height: 8px; opacity: 1; }
+    100% { width: 60px; height: 60px; opacity: 0; }
+}
+
+.iss-marker-icon-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 36px;
+    height: 36px;
+    filter: drop-shadow(0 0 6px #00f0ff);
+    transition: transform 0.2s ease;
+}
+
+.iss-marker-icon-box:hover {
+    transform: translate(-50%, -50%) scale(1.2);
+}
+
+.iss-svg-icon {
+    width: 100%;
+    height: 100%;
+}
+
+.iss-marker-label {
+    position: absolute;
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--cyan);
+    background: rgba(0, 0, 0, 0.75);
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid var(--cyan);
+    white-space: nowrap;
+}
+
+/* ミニウィジェットバー */
+.mini-widget-bar {
+    display: none;
+    pointer-events: auto;
+    background: var(--panel-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: #fff;
+    align-items: center;
+    justify-content: space-around;
+    width: 100%;
+}
+
+/* Widget モード */
+body.widget-mode .hud-header {
+    margin-bottom: auto;
+}
+
+body.widget-mode .header-left,
+body.widget-mode .telemetry-grid,
+body.widget-mode .meta-panel,
+body.widget-mode .time-travel-panel,
+body.widget-mode #btn-japan,
+body.widget-mode #btn-daynight,
+body.widget-mode #btn-toggle-timetravel {
+    display: none !important;
+}
+
+body.widget-mode .hud-overlay {
+    padding: 6px;
+}
+
+body.widget-mode .mini-widget-bar {
+    display: flex;
+    margin-top: auto;
+}
+
+body.widget-mode .controls-bar {
+    padding: 4px;
+}
+
+body.widget-mode .hud-btn {
+    padding: 5px 8px;
+    font-size: 0.72rem;
+}
+
+/* 設定モーダル */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal-overlay.open {
+    display: flex;
+}
+
+.modal-card {
+    background: #0f172a;
+    border: 1px solid var(--cyan);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 440px;
+    padding: 22px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 240, 255, 0.2);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.modal-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--cyan);
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.3rem;
+    cursor: pointer;
+}
+.btn-close:hover {
+    color: #fff;
+}
+
+.setting-item {
+    margin-bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.setting-label {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.setting-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.custom-select, .custom-range {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    outline: none;
+}
+
+.custom-select:focus {
+    border-color: var(--cyan);
+}
