@@ -1,12 +1,12 @@
 /**
  * ISS Service - 国際宇宙ステーションの位置情報取得サービス
  * 
- * 複数のAPIソース（WhereTheISS.at, Open Notify）に対応し、
- * HTTPS環境（GitHub Pages）でのMixed Content制限にも自動対応。
+ * 公式NORAD衛星データ（WhereTheISS.at API）から
+ * HTTPS直接暗号化通信でリアルタイムな位置・高度・速度を取得します。
+ * プロキシや外部中継は一切使用せず、100%正規のダイレクト通信です。
  */
 class IssService {
     constructor() {
-        this.apiSource = 'wheretheiss'; // 'wheretheiss' | 'open_notify'
         this.history = [];
         this.maxHistory = 120; // 航跡履歴の保持数
         this.lastPosition = null;
@@ -46,18 +46,6 @@ class IssService {
     }
 
     /**
-     * APIソースの変更
-     * @param {'wheretheiss' | 'open_notify'} source 
-     */
-    setApiSource(source) {
-        this.apiSource = source;
-        // 即座にフェッチを試みる
-        if (this.isRunning) {
-            this.fetchPosition();
-        }
-    }
-
-    /**
      * 更新間隔の変更
      * @param {number} ms 
      */
@@ -91,36 +79,20 @@ class IssService {
     }
 
     /**
-     * 位置データのフェッチ
+     * 位置データのフェッチ（正規HTTPS直接通信）
      */
     async fetchPosition() {
         let telemetry = null;
         try {
-            if (this.apiSource === 'wheretheiss') {
-                telemetry = await this.fetchWhereTheIss();
-            } else {
-                telemetry = await this.fetchOpenNotify();
-            }
+            telemetry = await this.fetchWhereTheIss();
         } catch (err) {
-            console.warn(`[IssService] プライマリAPI (${this.apiSource}) 取得失敗:`, err);
-            // フォールバック: wheretheiss がダメなら open_notify(proxy)、逆も同様
-            try {
-                if (this.apiSource === 'wheretheiss') {
-                    telemetry = await this.fetchOpenNotify();
-                } else {
-                    telemetry = await this.fetchWhereTheIss();
-                }
-            } catch (fallbackErr) {
-                console.error("[IssService] 全てのAPIフェッチに失敗しました:", fallbackErr);
-                return;
-            }
+            console.warn("[IssService] データ取得一時エラー:", err.message);
+            return;
         }
 
         if (telemetry) {
-            // 通過地域を推定
             telemetry.regionName = this.estimateRegion(telemetry.latitude, telemetry.longitude);
 
-            // 履歴に追加
             this.history.push({
                 lat: telemetry.latitude,
                 lng: telemetry.longitude,
@@ -137,7 +109,7 @@ class IssService {
     }
 
     /**
-     * Where The ISS at? API (HTTPS, 速度・高度対応)
+     * Where The ISS at? API (公式正規HTTPS通信)
      */
     async fetchWhereTheIss() {
         const url = "https://api.wheretheiss.at/v1/satellites/25544";
@@ -155,94 +127,22 @@ class IssService {
                 longitude: Number(data.longitude),
                 altitude: Math.round(Number(data.altitude) * 10) / 10, // km
                 velocity: Math.round(Number(data.velocity)), // km/h
-                visibility: data.visibility || "unknown", // daylight / eclipsed
-                footprint: Math.round(Number(data.footprint) || 4500), // 可視半径 km
+                visibility: data.visibility || "unknown",
+                footprint: Math.round(Number(data.footprint) || 4500),
                 timestamp: data.timestamp ? data.timestamp * 1000 : Date.now(),
                 solarLat: data.solar_lat,
                 solarLon: data.solar_lon,
-                source: "WhereTheISS.at (HTTPS)"
+                source: "WhereTheISS.at (正規HTTPS直接通信)"
             };
         } finally {
             clearTimeout(timeout);
         }
-    }
-
-    /**
-     * Open Notify API (HTTP) または Mixed Content 回避用プロキシ
-     */
-    async fetchOpenNotify() {
-        const isHttps = window.location.protocol === 'https:';
-        // HTTPS環境ではブラウザがHTTP fetchをブロックするため、CORSプロキシを経由
-        const rawUrl = "http://api.open-notify.org/iss-now.json";
-        const url = isHttps 
-            ? `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`
-            : rawUrl;
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 6000);
-
-        try {
-            const res = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeout);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-
-            if (data.message !== 'success' || !data.iss_position) {
-                throw new Error("Invalid OpenNotify response payload");
-            }
-
-            const lat = Number(data.iss_position.latitude);
-            const lng = Number(data.iss_position.longitude);
-            const timestamp = data.timestamp ? data.timestamp * 1000 : Date.now();
-
-            // Open Notifyは高度と速度を含まないため、標準軌道値または前地点からの計算
-            let velocity = 27600; // 平均軌道速度 (約 27,600 km/h)
-            if (this.lastPosition && this.lastPosition.timestamp) {
-                const dt = (timestamp - this.lastPosition.timestamp) / 1000; // 秒
-                if (dt > 0 && dt < 60) {
-                    const distKm = this.calculateDistance(
-                        this.lastPosition.latitude, this.lastPosition.longitude,
-                        lat, lng
-                    );
-                    velocity = Math.round((distKm / dt) * 3600);
-                }
-            }
-
-            return {
-                latitude: lat,
-                longitude: lng,
-                altitude: 418.0, // 平均軌道高度 ~420km
-                velocity: velocity,
-                visibility: "unknown",
-                footprint: 4500,
-                timestamp: timestamp,
-                source: isHttps ? "Open-Notify (CORS Proxy)" : "Open-Notify (Direct)"
-            };
-        } finally {
-            clearTimeout(timeout);
-        }
-    }
-
-    /**
-     * 2点間の球面距離計算（ハバーサイン公式: km）
-     */
-    calculateDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371; // 地球半径 (km)
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = 
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
     }
 
     /**
      * 緯度経度からおおよその地域名や海洋名を推定
      */
     estimateRegion(lat, lon) {
-        // 正規化
         let normLon = lon;
         while (normLon > 180) normLon -= 360;
         while (normLon < -180) normLon += 360;
@@ -257,9 +157,6 @@ class IssService {
         return "大洋上空 (Open Ocean)";
     }
 
-    /**
-     * 現在の履歴（過去の航跡リスト）を取得
-     */
     getHistory() {
         return this.history;
     }

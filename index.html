@@ -181,13 +181,12 @@
             </div>
 
             <div class="setting-item">
-                <label class="setting-label">APIデータソース</label>
-                <select id="select-api-source" class="custom-select">
-                    <option value="wheretheiss">Where The ISS at? (HTTPS対応・速度/高度標準) [推奨]</option>
-                    <option value="open_notify">Open Notify API (http://api.open-notify.org/iss-now.json)</option>
-                </select>
+                <label class="setting-label">APIデータ通信方式</label>
+                <div style="font-size: 0.8rem; color: var(--cyan); font-family: var(--font-mono); font-weight: bold;">
+                    Where The ISS at? API (公式正規HTTPS直接通信)
+                </div>
                 <p class="setting-desc">
-                    ※ GitHub PagesなどのHTTPS環境では、Open Notify直接呼び出し時にMixed Content制約があるためプロキシ経由で中継されます。
+                    外部プロキシを介さず、公式衛星データサーバーと直接暗号化通信を行っています。
                 </p>
             </div>
 
@@ -206,7 +205,7 @@
                     <div>・<strong>2D世界地図:</strong> D3.js / d3-geo-projection (ISC License)</div>
                     <div>・<strong>地図データ:</strong> World Atlas / Natural Earth (Public Domain)</div>
                     <div>・<strong>地球テクスチャ:</strong> NASA Earth Observatory (Public Domain)</div>
-                    <div>・<strong>ISSデータ:</strong> WhereTheISS.at / Open Notify</div>
+                    <div>・<strong>ISSデータ:</strong> WhereTheISS.at (公式正規HTTPS直接通信)</div>
                 </div>
             </div>
         </div>

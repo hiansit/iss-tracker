@@ -50,8 +50,7 @@ Windowsデスクトップの片隅に常駐させて眺められる「デスク�
 | **トポロジーデータ変換** | [TopoJSON](https://github.com/topojson/topojson) | Mike Bostock | [BSD 3-Clause](https://github.com/topojson/topojson/blob/master/LICENSE) |
 | **世界地図境界データ** | [World Atlas](https://github.com/topojson/world-atlas) (Natural Earth) | Natural Earth | [Public Domain (CC0)](https://www.naturalearthdata.com/about/terms-of-use/) |
 | **地球高解像度画像** | [Blue Marble / Earth at Night](https://earthobservatory.nasa.gov/) | NASA Earth Observatory | [Public Domain](https://www.nasa.gov/multimedia/guidelines/index.html) |
-| **リアルタイムISS軌道データ** | [Where The ISS at? API](https://wheretheiss.at/) | Bill Shupp | Open API (Keyless) |
-| **ISS位置データ (代替)** | [Open Notify API](http://open-notify.org/) | Nathan Bergey | Open API (Keyless) |
+| **リアルタイムISS軌道データ** | [Where The ISS at? API](https://wheretheiss.at/) | Bill Shupp | Open API (Keyless / HTTPS) |
 
 ---
 
